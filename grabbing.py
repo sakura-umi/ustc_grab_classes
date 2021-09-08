@@ -143,7 +143,7 @@ class Report(object):
         }
         ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
         print(session.cookies.get_dict())
-        ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/109184/turn/461/select", cookies=session.cookies)
+        ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/{}/turn/461/select".format(class_info['stdAssoc']), cookies=session.cookies)
         print(ret.cookies)
         ret = session.get(url_info['apply'])
         #getform0 = session.get(APPLY_URL)
