@@ -54,14 +54,25 @@ class Report(object):
             'Connection': 'close',
             'cookie': cookies,
         }
-        session.headers['Context-Type'] = 'application/json;charset=UTF-8'
-        headers = {'Content-Type':'application/json;charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive',
-        'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184'}
-        headers2 = {'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67', 'Accept-Encoding': 'gzip, deflate', 'Accept': '*/*', 'Connection': 'keep-alive',
-        'Referer': 'https://jw.ustc.edu.cn/for-std/course-select/turns/109184'}
-        print(session.headers)
+        #选课post数据的headers
+        headers = {
+            'Content-Type':'application/json;charset=UTF-8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept': '*/*',
+            'Connection': 'keep-alive',
+            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184'
+        }
+        #激活cookie用headers
+        headers2 = {
+            'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept': '*/*',
+            'Connection': 'keep-alive',
+            'Referer': 'https://jw.ustc.edu.cn/for-std/course-select/turns/109184'
+        }
+        #个性化申请表单-save
         data = {
             'applyReason': '申请',
             'applyTypeAssoc': 1,
@@ -72,15 +83,19 @@ class Report(object):
             'semesterAssoc': 221,
             'studentAssoc': 109184,
         }
-        data2 = [{"newLessonAssoc":135585,"studentAssoc":109184,"semesterAssoc":221,"bizTypeAssoc":2,"applyTypeAssoc":1,"applyReason":"申请","retake": False,"scheduleGroupAssoc": None}]
-        #data3 = json.dumps(data2)
-        print(data2)
-        print("???????????????????")
-        print(login_ret.cookies)
-        print(json.dumps(data2))
+        #个性化申请表单-preCheck
+        data2 = [{
+            "newLessonAssoc": 135585,
+            "studentAssoc": 109184,
+            "semesterAssoc": 221,
+            "bizTypeAssoc": 2,
+            "applyTypeAssoc": 1,
+            "applyReason": "申请",
+            "retake": False,
+            "scheduleGroupAssoc": None
+        }]
         ret = session.get("https://jw.ustc.edu.cn/webroot/decision/login/cross/domain?fine_username=PB19000244&fine_password=682ef8d16f48228ea2e938c3f245a317&validity=-1")
         print(ret.text)
-        print("!!!!!!!!!!!!!!!!!!!")
         ret = session.get("https://jw.ustc.edu.cn/")
         print(ret.cookies)
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select")
@@ -91,15 +106,10 @@ class Report(object):
             "studentId": 109184
         }
         ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
-        print(str(ret)+ret.text)
         print(session.cookies.get_dict())
-        print("-------------=----")
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/109184/turn/461/select", cookies=session.cookies)
         print(ret.cookies)
-        print("12332123123132312")
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184")
-        print(ret.cookies)
-        print("...................")
         #getform0 = session.get(APPLY_URL)
         #print(getform0.text)
         print(session.cookies.get_dict())
@@ -107,7 +117,6 @@ class Report(object):
         print(getform1)
         print(getform1.text)
         print(getform1.url)
-        print(".......?????.......")
         getform2 = session.get(GETRETAKE_URL)
         print(getform2.text)
         getform3 = session.post(SAVE_URL, data=json.dumps(data), headers=headers)
