@@ -18,35 +18,16 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 
-STUID=XXXXXX
-STUKEY=XXXXXX
-CLASSNUM=
-CLASSNAME=
-CLASSTEACHER=
+STUID=''
+STUKEY=''
+CLASSNUM = ''#当两个就可以定位时，此处可以保留空串
+CLASSNAME = '日本社会'
+CLASSTEACHER = '小森阳子'
 
 
 
 LOGIN_URL="https://passport.ustc.edu.cn/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin"
 RETURN_URL="https://jw.ustc.edu.cn/ucas-sso/login"
-
-class_info={
-    'stdAssoc' : str(STDASSOC),
-    'lessonAssoc': str(LESSONASSOC),
-    'classNum': str(CLASSNUM),
-    'className': quote(CLASSNAME),
-    'classTeacher': quote(CLASSTEACHER)
-}
-
-ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
-#查询自己已经选中的课的接口
-#CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc=109184&courseNameZhLike=%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86%E5%92%8C%E6%8A%80%E6%9C%AF&courseTakeStatusSetVal=1&_=1630905472080"
-#全校开课查询接口
-#ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/109184?courseNameZhLike=&teacherNameLike="
-
-APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonAssoc}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
-PRECHECK_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
-GETRETAKE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds={lessonAssoc}&studentId={stdAssoc}&bizTypeId=2"
-SAVE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/save"
 url_send = "http://qqbot.srpr.cc/send_private_msg?user_id=594547763&message="
 url_send2 = "http://qq.srpr.cc:50080/send_private_msg?user_id=594547763&message="
 url_chuo = "http://qqbot.srpr.cc/send_private_msg?user_id=594547763&message=[CQ:poke,qq=594547763]"
@@ -56,7 +37,7 @@ class Report(object):
     def __init__(self):
         self.stuid = STUID
         self.password = STUKEY
-    def link_generate(self)
+    def link_generate(self):
         session, login_ret = self.login()
         hl = hashlib.md5()
         STUID_MD5 = hl.update(STUID.encode(encoding='utf-8'))
@@ -66,9 +47,6 @@ class Report(object):
         url_stuid = ret.url
         pos = url_stuid.rfind('/', 0, len(url_stuid))
         STDASSOC = url_stuid[pos+1:]
-        CLASSNUM = ''
-        CLASSNAME = '日本社会'
-        CLASSTEACHER = '小森阳子'
 
         class_info={
             'stdAssoc' : STDASSOC,
@@ -141,16 +119,16 @@ class Report(object):
             'applyReason': '申请',
             'applyTypeAssoc': 1,
             'bizTypeAssoc': 2,
-            'newLessonAssoc': class_info['lessonId'],
+            'newLessonAssoc': int(class_info['lessonId']),
             'retake': False,
             'scheduleGroupAssoc': None,
             'semesterAssoc': 221,
-            'studentAssoc': class_info['stdAssoc'],
+            'studentAssoc': int(class_info['stdAssoc']),
         }
         #个性化申请表单-preCheck
         data2 = [{
-            "newLessonAssoc": class_info['lessonId'],
-            "studentAssoc": class_info['stdAssoc'],
+            "newLessonAssoc": int(class_info['lessonId']),
+            "studentAssoc": int(class_info['stdAssoc']),
             "semesterAssoc": 221,
             "bizTypeAssoc": 2,
             "applyTypeAssoc": 1,
@@ -161,7 +139,7 @@ class Report(object):
         ret = session.get("https://jw.ustc.edu.cn/static/courseselect/template/open-turns.html", cookies=session.cookies)
         data_activate = {
             "bizTypeId": 2,
-            "studentId": 109184
+            "studentId": int(class_info['stdAssoc'])
         }
         ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
         print(session.cookies.get_dict())
