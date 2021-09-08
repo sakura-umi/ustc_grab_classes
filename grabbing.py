@@ -12,19 +12,40 @@ import os
 from bs4 import BeautifulSoup
 import PIL
 import pytesseract
+import urllib.parse
+import hashlib
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+
 STUID=XXXXXX
 STUKEY=XXXXXX
+CLASSNUM=
+CLASSNAME=
+CLASSTEACHER=
+
 
 
 LOGIN_URL="https://passport.ustc.edu.cn/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin"
 RETURN_URL="https://jw.ustc.edu.cn/ucas-sso/login"
-CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc=109184&courseNameZhLike=%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86%E5%92%8C%E6%8A%80%E6%9C%AF&courseTakeStatusSetVal=1&_=1630905472080"
-APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184"
+
+class_info={
+    'stdAssoc' : str(STDASSOC),
+    'lessonAssoc': str(LESSONASSOC),
+    'classNum': str(CLASSNUM),
+    'className': quote(CLASSNAME),
+    'classTeacher': quote(CLASSTEACHER)
+}
+
+ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
+#查询自己已经选中的课的接口
+#CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc=109184&courseNameZhLike=%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86%E5%92%8C%E6%8A%80%E6%9C%AF&courseTakeStatusSetVal=1&_=1630905472080"
+#全校开课查询接口
+#ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/109184?courseNameZhLike=&teacherNameLike="
+
+APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonAssoc}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
 PRECHECK_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
-GETRETAKE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds=135585&studentId=109184&bizTypeId=2"
+GETRETAKE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds={lessonAssoc}&studentId={stdAssoc}&bizTypeId=2"
 SAVE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/save"
 url_send = "http://qqbot.srpr.cc/send_private_msg?user_id=594547763&message="
 url_send2 = "http://qq.srpr.cc:50080/send_private_msg?user_id=594547763&message="
@@ -35,12 +56,55 @@ class Report(object):
     def __init__(self):
         self.stuid = STUID
         self.password = STUKEY
+    def link_generate(self)
+        session, login_ret = self.login()
+        hl = hashlib.md5()
+        STUID_MD5 = hl.update(STUID.encode(encoding='utf-8'))
+        ret = session.get("https://jw.ustc.edu.cn/webroot/decision/login/cross/domain?fine_username={}&fine_password={}&validity=-1".format(STUID, hl.hexdigest()))
+        ret = session.get("https://jw.ustc.edu.cn/")
+        ret = session.get("https://jw.ustc.edu.cn/for-std/course-select")
+        url_stuid = ret.url
+        pos = url_stuid.rfind('/', 0, len(url_stuid))
+        STDASSOC = url_stuid[pos+1:]
+        CLASSNUM = ''
+        CLASSNAME = '日本社会'
+        CLASSTEACHER = '小森阳子'
 
+        class_info={
+            'stdAssoc' : STDASSOC,
+            'classNum': str(CLASSNUM),
+            'className': urllib.parse.quote(CLASSNAME),
+            'classTeacher': urllib.parse.quote(CLASSTEACHER)
+        }
+
+        ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
+        #查询自己已经选中的课的接口
+        #CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc=109184&courseNameZhLike=%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86%E5%92%8C%E6%8A%80%E6%9C%AF&courseTakeStatusSetVal=1&_=1630905472080"
+        #全校开课查询接口
+        #ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/109184?courseNameZhLike=&teacherNameLike="
+        ret = session.get(ALLCLASSINFO_URL)
+        lessonId = json.loads(ret.text)['data'][0]['id']
+        class_info['lessonId'] = lessonId
+
+        APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonId}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
+        PRECHECK_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
+        GETRETAKE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds={lessonId}&studentId={stdAssoc}&bizTypeId=2".format(**class_info)
+        SAVE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/save"
+
+        url_info = {
+            'all': ALLCLASSINFO_URL,
+            'apply': APPLY_URL,
+            'precheck': PRECHECK_URL,
+            'getretake': GETRETAKE_URL,
+            'save': SAVE_URL
+        }
+
+        return session, class_info, url_info
     def report(self):
         loginsuccess = False
         retrycount = 5
 
-        session, login_ret = self.login()
+        session, class_info, url_info = self.link_generate()
         cookies = session.cookies
         headers = {
             'authority': 'jw.ustc.edu.cn',
@@ -77,16 +141,16 @@ class Report(object):
             'applyReason': '申请',
             'applyTypeAssoc': 1,
             'bizTypeAssoc': 2,
-            'newLessonAssoc': 135585,
+            'newLessonAssoc': class_info['lessonId'],
             'retake': False,
             'scheduleGroupAssoc': None,
             'semesterAssoc': 221,
-            'studentAssoc': 109184,
+            'studentAssoc': class_info['stdAssoc'],
         }
         #个性化申请表单-preCheck
         data2 = [{
-            "newLessonAssoc": 135585,
-            "studentAssoc": 109184,
+            "newLessonAssoc": class_info['lessonId'],
+            "studentAssoc": class_info['stdAssoc'],
             "semesterAssoc": 221,
             "bizTypeAssoc": 2,
             "applyTypeAssoc": 1,
@@ -94,12 +158,6 @@ class Report(object):
             "retake": False,
             "scheduleGroupAssoc": None
         }]
-        ret = session.get("https://jw.ustc.edu.cn/webroot/decision/login/cross/domain?fine_username=PB19000244&fine_password=682ef8d16f48228ea2e938c3f245a317&validity=-1")
-        print(ret.text)
-        ret = session.get("https://jw.ustc.edu.cn/")
-        print(ret.cookies)
-        ret = session.get("https://jw.ustc.edu.cn/for-std/course-select")
-        print(ret.url)
         ret = session.get("https://jw.ustc.edu.cn/static/courseselect/template/open-turns.html", cookies=session.cookies)
         data_activate = {
             "bizTypeId": 2,
@@ -109,17 +167,17 @@ class Report(object):
         print(session.cookies.get_dict())
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/109184/turn/461/select", cookies=session.cookies)
         print(ret.cookies)
-        ret = session.get("https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184")
+        ret = session.get(url_info['apply'])
         #getform0 = session.get(APPLY_URL)
         #print(getform0.text)
         print(session.cookies.get_dict())
-        getform1 = session.post(PRECHECK_URL, data=json.dumps(data2), headers=headers)
+        getform1 = session.post(url_info['precheck'], data=json.dumps(data2), headers=headers)
         print(getform1)
         print(getform1.text)
         print(getform1.url)
-        getform2 = session.get(GETRETAKE_URL)
+        getform2 = session.get(url_info['getretake'])
         print(getform2.text)
-        getform3 = session.post(SAVE_URL, data=json.dumps(data), headers=headers)
+        getform3 = session.post(url_info['save'], data=json.dumps(data), headers=headers)
         print(getform3.text)
         return True
     def login(self):
