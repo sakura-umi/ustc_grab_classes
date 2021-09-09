@@ -27,10 +27,6 @@ STUKEY='XXXXXX'
 
 LOGIN_URL="https://passport.ustc.edu.cn/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin"
 RETURN_URL="https://jw.ustc.edu.cn/ucas-sso/login"
-url_send = "http://qqbot.srpr.cc/send_private_msg?user_id=594547763&message="
-url_send2 = "http://qq.srpr.cc:50080/send_private_msg?user_id=594547763&message="
-url_chuo = "http://qqbot.srpr.cc/send_private_msg?user_id=594547763&message=[CQ:poke,qq=594547763]"
-url_chuo2 = "http://qq.srpr.cc:50080/send_private_msg?user_id=594547763&message=[CQ:poke,qq=594547763]"
 
 class Report(object):
     def __init__(self):
