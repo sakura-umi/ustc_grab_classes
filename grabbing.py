@@ -17,16 +17,21 @@ import hashlib
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-STUID='XXXXXX'
-STUKEY='XXXXXX'
-#CLASSNUM = ''#当两个就可以定位时，此处可以保留空串
-#CLASSNAME = 'Web信息处理'
-#CLASSTEACHER = '徐童'
-
-
+STUID='XXXXXX'#学号
+STUKEY='XXXXXX'#统一认证登录密码
+MODE='monitor'#模式,分为两种 "grab"和"monitor". monitor只监控, grab监控到又空余位置时进行抢课.
+#下面是qqbot推送参数
+QQ='XXXXXX'
+GROUP='XXXXXX'
+QQAPIURL='http://XXX.XXX:XXX'
 
 LOGIN_URL="https://passport.ustc.edu.cn/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin"
 RETURN_URL="https://jw.ustc.edu.cn/ucas-sso/login"
+
+qqmsg_send='{}/send_private_msg?user_id={}&message='.format(QQAPIURL, QQ)
+qqmsg_chuo='{}/send_private_msg?user_id={}&message=[CQ:poke,qq={}]'.format(QQAPIURL, QQ, QQ)
+qqmsg_at='{}/send_group_msg?group_id={}&message=[CQ:at,qq={}]'.format(QQAPIURL, GROUP, QQ)
+
 
 class Report(object):
     def __init__(self):
@@ -45,7 +50,9 @@ class Report(object):
         hl = hashlib.md5()
         STUID_MD5 = hl.update(STUID.encode(encoding='utf-8'))
         ret = session.get("https://jw.ustc.edu.cn/webroot/decision/login/cross/domain?fine_username={}&fine_password={}&validity=-1".format(STUID, hl.hexdigest()))
+        print("1 success!")
         ret = session.get("https://jw.ustc.edu.cn/")
+        print("2 success!")
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select")
         url_stuid = ret.url
         pos = url_stuid.rfind('/', 0, len(url_stuid))
@@ -58,53 +65,93 @@ class Report(object):
             'classTeacher': urllib.parse.quote(CLASSTEACHER)
         }
         print("searching target class...\n")
+
         ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
-        #查询自己已经选中的课的接口
-        #CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc=109184&courseNameZhLike=%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86%E5%92%8C%E6%8A%80%E6%9C%AF&courseTakeStatusSetVal=1&_=1630905472080"
-        #全校开课查询接口
-        #ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/109184?courseNameZhLike=&teacherNameLike="
+        
 
         ret = session.get(ALLCLASSINFO_URL)
         info = json.loads(ret.text)
         lessonId = info['data'][0]['id']
         limitCount = info['data'][0]['limitCount']
         stdCount = info['data'][0]['stdCount']
+        class_name = info['data'][0]['course']['nameZh']
+        class_teacher = info['data'][0]['teacherAssignmentList'][0]['person']['nameZh']
+        class_time = info['data'][0]['scheduleText']['dateTimePlacePersonText']['text']
         class_info['lessonId'] = lessonId
-        print("target class: " + CLASSNAME + "\nlesson id: " + str(lessonId) + "\ncurrent selected/limited count: " + str(stdCount) + '/' + str(limitCount) + '\n')
+        print("target class: " + class_name + "\nlesson id: " + str(lessonId) + "\ncurrent selected/limited count: " + str(stdCount) + '/' + str(limitCount) + '\n')
+
+        print("find existing selected class...")
+
+        CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc={}&courseNameZhLike={}&courseTakeStatusSetVal=1".format(STDASSOC, urllib.parse.quote(class_name))
+        ret = session.get(CLASSINFO_URL)
+        if (len(json.loads(ret.text)['data']) == 0):
+            GRAB_MODE = 0
+            oldLessonAssoc = 0
+        else:
+            GRAB_MODE = 1
+            oldLessonCode = json.loads(ret.text)['data'][0]['lessonCode']
+
+            ret = session.get("https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{}?codeLike={}&courseNameZhLike=&teacherNameLike=".format(STDASSOC, oldLessonCode))
+
+            oldLessonAssoc = json.loads(ret.text)['data'][0]['id']
+
+        class_info['oldLessonAssoc'] = oldLessonAssoc
 
         APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonId}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
-        PRECHECK_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
-        GETRETAKE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds={lessonId}&studentId={stdAssoc}&bizTypeId=2".format(**class_info)
-        SAVE_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/save"
+        PRECHECK_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
+        GETRETAKE_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds={lessonId}&studentId={stdAssoc}&bizTypeId=2".format(**class_info)
+        SAVE_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/save"
 
+        CHANGE_APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/change-class-apply/change-class?lessonAssoc={lessonId}&oldLessonId={oldLessonAssoc}&bizTypeAssoc=2&semesterAssoc=221&studentAssoc={stdAssoc}&applyTypeAssoc=5".format(**class_info)
+        CHANGE_PRECHECK_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
+        ADD_DROP_REQUEST = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/add-drop-request"
+        ADD_DROP_RESPOND = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/add-drop-response"
         url_info = {
+            'mode': GRAB_MODE,
             'all': ALLCLASSINFO_URL,
             'apply': APPLY_URL,
             'precheck': PRECHECK_URL,
             'getretake': GETRETAKE_URL,
-            'save': SAVE_URL
+            'save': SAVE_URL,
+            'change_apply': CHANGE_APPLY_URL,
+            'change_precheck': CHANGE_PRECHECK_URL,
+            'drop_request': ADD_DROP_REQUEST,
+            'drop_respond': ADD_DROP_RESPOND
         }
         while True:
             ret = session.get(ALLCLASSINFO_URL)
             info = json.loads(ret.text)
             limitCount = info['data'][0]['limitCount']
             stdCount = info['data'][0]['stdCount']
-            if(stdCount <= limitCount):
-                print("Class not full, grabbing...")
-                retVal = self.report(session, class_info, url_info)
-                if retVal:
-                    print("Sucessfully grabbed!")
-                    exit(0)
+            if(stdCount < limitCount):
+                if(MODE == 'grab'):
+                    print("Class not full {}/{}, grabbing...".format(stdCount, limitCount))
+                    requests.get(qqmsg_send+"注意！！课程人数未满！现在为{}/{}人".format(stdCount, limitCount))
+                    retry_count=5
+                    retVal = False
+                    while not retVal:
+                        retVal = self.report(session, class_info, url_info)
+                        if retVal:
+                            print("Sucessfully grabbed!")
+                            requests.get(qqmsg_send + "抢课成功, 课程名:{}, 老师:{}, 上课时间:{}".format(class_name, class_teacher, class_time))
+                            exit(0)
+                        else:
+                            print("Failed, retry...")
+                            retry_count = retry_count - 1
+                            if(retry_count == 0):
+                                continue
                 else:
-                    print("Failed!")
+                    print("Class not full {}/{}, push QQmsg...".format(stdCount, limitCount))
+                    requests.get(qqmsg_send+"注意！！课程人数未满！现在为{}/{}人".format(stdCount, limitCount))
+                    requests.get(qqmsg_at+"\n{}课程人数未满！现在为{}/{}人".format(stdCount, limitCount))
             else:
                 print("Class is full.")
-            time.sleep(5)
+                requests.get(qqmsg_send+"课程人数已满！现在为{}/{}人".format(stdCount, limitCount))
+            time.sleep(60)
         return True
     def report(self, session, class_info, url_info):
         loginsuccess = False
         retrycount = 5
-        #session, class_info, url_info = self.link_generate()
         cookies = session.cookies
         #选课post数据的headers
         headers = {
@@ -113,7 +160,7 @@ class Report(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept': '*/*',
             'Connection': 'keep-alive',
-            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184'
+            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={}'.format(class_info['lessonId'], class_info['stdAssoc'])
         }
         #激活cookie用headers
         headers2 = {
@@ -122,7 +169,14 @@ class Report(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept': '*/*',
             'Connection': 'keep-alive',
-            'Referer': 'https://jw.ustc.edu.cn/for-std/course-select/turns/109184'
+            'Referer': 'https://jw.ustc.edu.cn/for-std/course-select/turns/{}'.format(class_info['stdAssoc'])
+        }
+        headers3 = {
+            'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept': '*/*',
+            'Connection': 'keep-alive'
         }
         #个性化申请表单-save
         data = {
@@ -146,27 +200,70 @@ class Report(object):
             "retake": False,
             "scheduleGroupAssoc": None
         }]
-        ret = session.get("https://jw.ustc.edu.cn/static/courseselect/template/open-turns.html", cookies=session.cookies)
+        data3 = [{
+            "oldLessonAssoc": int(class_info['oldLessonAssoc']),
+            "newLessonAssoc": int(class_info['lessonId']),
+            "studentAssoc": int(class_info['stdAssoc']),
+            "semesterAssoc": 221,
+            "bizTypeAssoc": 2,
+            "applyReason": "申请",
+            "applyTypeAssoc": 5,
+            "scheduleGroupAssoc": None
+        }]
+        data4 = {
+            "studentAssoc": int(class_info['stdAssoc']),
+            "semesterAssoc": 221,
+            "bizTypeAssoc": 2,
+            "applyTypeAssoc": 5,
+            "checkFalseInsertApply": True,
+            "lessonAndScheduleGroups":[{
+                "lessonAssoc": int(class_info['lessonId']),
+                "dropLessonAssoc": int(class_info['oldLessonAssoc']),
+                "scheduleGroupAssoc": None
+            }]
+        }
         data_activate = {
             "bizTypeId": 2,
             "studentId": int(class_info['stdAssoc'])
         }
+        ret = session.get("https://jw.ustc.edu.cn/static/courseselect/template/open-turns.html", cookies=session.cookies)
+        
         ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
 
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/{}/turn/461/select".format(class_info['stdAssoc']), cookies=session.cookies)
+        
+        if(url_info['mode'] == 0):
+            ret = session.get(url_info['apply'])
 
-        ret = session.get(url_info['apply'])
+            ret = session.post(url_info['change_precheck'], data=json.dumps(data2), headers=headers)
 
-        ret = session.post(url_info['precheck'], data=json.dumps(data2), headers=headers)
+            ret = session.get(url_info['getretake'])
 
-        ret = session.get(url_info['getretake'])
+            ret = session.post(url_info['save'], data=json.dumps(data), headers=headers)
 
-        ret = session.post(url_info['save'], data=json.dumps(data), headers=headers)
-
-        if(ret.text == 'null'):
-            return True
+            if(ret.text == 'null'):
+                return True
+            else:
+                return False
         else:
-            return False
+            ret = session.get(url_info['change_apply'])
+
+            ret = session.post(url_info['precheck'], data=json.dumps(data3), headers=headers)
+
+            ret = session.post(url_info['drop_request'], data=json.dumps(data4), headers=headers)
+
+            print(ret)
+
+            requestId = ret.text
+
+            data_respond = {
+                'studentId': class_info['stdAssoc'],
+                'requestId': requestId
+            }
+            ret = session.post(url_info['drop_respond'], data=json.dumps(data_respond), headers=headers3)
+
+            return True
+
 
     def login(self):
         retries = Retry(total=5,
@@ -211,11 +308,17 @@ class Report(object):
 
 if __name__ == "__main__":
 
+#参数说明:
+#   第一个参数为模式选择, grab为抢课模式, monitor为监控模式
+#   第二个参数为课程中文名称
+#   第三个参数为课程授课老师
+#   第四个参数为课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)
     len_argv = len(sys.argv)
-    CLASSNAME = str(sys.argv[1])
-    CLASSTEACHER = str(sys.argv[2])
-    if len_argv == 4:
-        CLASSNUM = str(sys.argv[3])
+    MODE = str(sys.argv[1])
+    CLASSNAME = str(sys.argv[2])
+    CLASSTEACHER = str(sys.argv[3])
+    if len_argv == 5:
+        CLASSNUM = str(sys.argv[4])
     else:
         CLASSNUM = ''
     autorepoter = Report()
