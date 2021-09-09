@@ -17,12 +17,11 @@ import hashlib
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-
-STUID=''
-STUKEY=''
-CLASSNUM = ''#当两个就可以定位时，此处可以保留空串
-CLASSNAME = '日本社会'
-CLASSTEACHER = '小森阳子'
+STUID='XXXXXX'
+STUKEY='XXXXXX'
+#CLASSNUM = ''#当两个就可以定位时，此处可以保留空串
+#CLASSNAME = 'Web信息处理'
+#CLASSTEACHER = '徐童'
 
 
 
@@ -39,6 +38,14 @@ class Report(object):
         self.password = STUKEY
     def link_generate(self):
         session, login_ret = self.login()
+
+        back = session.get("https://jw.ustc.edu.cn/")
+        backurl = back.url
+        if(backurl == 'https://jw.ustc.edu.cn/home'):
+            print("login success!")
+        else:
+            print("login failed!")
+
         hl = hashlib.md5()
         STUID_MD5 = hl.update(STUID.encode(encoding='utf-8'))
         ret = session.get("https://jw.ustc.edu.cn/webroot/decision/login/cross/domain?fine_username={}&fine_password={}&validity=-1".format(STUID, hl.hexdigest()))
@@ -54,15 +61,20 @@ class Report(object):
             'className': urllib.parse.quote(CLASSNAME),
             'classTeacher': urllib.parse.quote(CLASSTEACHER)
         }
-
+        print("searching target class...\n")
         ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
         #查询自己已经选中的课的接口
         #CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc=109184&courseNameZhLike=%E7%BC%96%E8%AF%91%E5%8E%9F%E7%90%86%E5%92%8C%E6%8A%80%E6%9C%AF&courseTakeStatusSetVal=1&_=1630905472080"
         #全校开课查询接口
         #ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/109184?courseNameZhLike=&teacherNameLike="
+
         ret = session.get(ALLCLASSINFO_URL)
-        lessonId = json.loads(ret.text)['data'][0]['id']
+        info = json.loads(ret.text)
+        lessonId = info['data'][0]['id']
+        limitCount = info['data'][0]['limitCount']
+        stdCount = info['data'][0]['stdCount']
         class_info['lessonId'] = lessonId
+        print("target class: " + CLASSNAME + "\nlesson id: " + str(lessonId) + "\ncurrent selected/limited count: " + str(stdCount) + '/' + str(limitCount) + '\n')
 
         APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonId}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
         PRECHECK_URL="https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
@@ -76,26 +88,28 @@ class Report(object):
             'getretake': GETRETAKE_URL,
             'save': SAVE_URL
         }
-
-        return session, class_info, url_info
-    def report(self):
+        while True:
+            ret = session.get(ALLCLASSINFO_URL)
+            info = json.loads(ret.text)
+            limitCount = info['data'][0]['limitCount']
+            stdCount = info['data'][0]['stdCount']
+            if(stdCount <= limitCount):
+                print("Class not full, grabbing...")
+                retVal = self.report(session, class_info, url_info)
+                if retVal:
+                    print("Sucessfully grabbed!")
+                    exit(0)
+                else:
+                    print("Failed!")
+            else:
+                print("Class is full.")
+            time.sleep(5)
+        return True
+    def report(self, session, class_info, url_info):
         loginsuccess = False
         retrycount = 5
-
-        session, class_info, url_info = self.link_generate()
+        #session, class_info, url_info = self.link_generate()
         cookies = session.cookies
-        headers = {
-            'authority': 'jw.ustc.edu.cn',
-            'origin': 'https://jw.ustc.edu.cn',
-            'upgrade-insecure-requests': '1',
-            'content-type': 'application/json',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.100 Safari/537.36',
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-            'referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc=135585&semesterAssoc=221&bizTypeAssoc=2&studentAssoc=109184',
-            'accept-language': 'zh-CN,zh;q=0.9',
-            'Connection': 'close',
-            'cookie': cookies,
-        }
         #选课post数据的headers
         headers = {
             'Content-Type':'application/json;charset=UTF-8',
@@ -142,22 +156,22 @@ class Report(object):
             "studentId": int(class_info['stdAssoc'])
         }
         ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
-        print(session.cookies.get_dict())
+
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/{}/turn/461/select".format(class_info['stdAssoc']), cookies=session.cookies)
-        print(ret.cookies)
+
         ret = session.get(url_info['apply'])
-        #getform0 = session.get(APPLY_URL)
-        #print(getform0.text)
-        print(session.cookies.get_dict())
-        getform1 = session.post(url_info['precheck'], data=json.dumps(data2), headers=headers)
-        print(getform1)
-        print(getform1.text)
-        print(getform1.url)
-        getform2 = session.get(url_info['getretake'])
-        print(getform2.text)
-        getform3 = session.post(url_info['save'], data=json.dumps(data), headers=headers)
-        print(getform3.text)
-        return True
+
+        ret = session.post(url_info['precheck'], data=json.dumps(data2), headers=headers)
+
+        ret = session.get(url_info['getretake'])
+
+        ret = session.post(url_info['save'], data=json.dumps(data), headers=headers)
+
+        if(ret.text == 'null'):
+            return True
+        else:
+            return False
+
     def login(self):
         retries = Retry(total=5,
                         backoff_factor=0.5,
@@ -194,12 +208,20 @@ class Report(object):
         }
         ret = s.post(LOGIN_URL, data=data)
         print("login...")
-        print(ret.cookies.get_dict)
-        print(s.cookies.get_dict())
+        #print(ret.cookies.get_dict)
+        #print(s.cookies.get_dict())
         return s, ret
 
 
 if __name__ == "__main__":
+
+    len_argv = len(sys.argv)
+    CLASSNAME = str(sys.argv[1])
+    CLASSTEACHER = str(sys.argv[2])
+    if len_argv == 4:
+        CLASSNUM = str(sys.argv[3])
+    else:
+        CLASSNUM = ''
     autorepoter = Report()
-    ret = autorepoter.report()
+    ret = autorepoter.link_generate()
 
