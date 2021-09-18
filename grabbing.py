@@ -310,17 +310,24 @@ if __name__ == "__main__":
 
 #参数说明:
 #   第一个参数为模式选择, grab为抢课模式, monitor为监控模式
-#   第二个参数为课程中文名称
-#   第三个参数为课程授课老师
-#   第四个参数为课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)
-    len_argv = len(sys.argv)
-    MODE = str(sys.argv[1])
-    CLASSNAME = str(sys.argv[2])
-    CLASSTEACHER = str(sys.argv[3])
-    if len_argv == 5:
-        CLASSNUM = str(sys.argv[4])
-    else:
-        CLASSNUM = ''
+#   第二个参数为两次查询间隔时间，单位为秒（默认为60）
+#   第三个参数为课程中文名称
+#   第四个参数为课程授课老师
+#   第五个参数为课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)
+    parser = argparse.ArgumentParser(description='中国科学技术大学抢课脚本.')
+    parser.add_argument('mode', help='模式选择, grab为抢课模式, monitor为监控模式.', type=str)
+    parser.add_argument('-t', '--time', help='两次查询间隔时间，单位为秒 (默认为60).', type=int, default=60)
+    parser.add_argument('name', help='选中课程的中文名称', type=str)
+    parser.add_argument('teacher', help='选中课程的授课老师', type=str)
+    parser.add_argument('classid', help='课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)', type=str, default='', nargs='?')
+    args = parser.parse_args()
+
+    MODE = args.mode
+    TIME_INTERVAL = args.time
+    CLASSNAME = args.class_name
+    CLASSTEACHER = args.class_teacher
+    CLASSNUM = args.class_id
+    
     autorepoter = Report()
     ret = autorepoter.link_generate()
 
