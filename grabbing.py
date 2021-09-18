@@ -324,9 +324,9 @@ if __name__ == "__main__":
     
     MODE = args.mode
     TIME_INTERVAL = args.time
-    CLASSNAME = args.class_name
-    CLASSTEACHER = args.class_teacher
-    CLASSNUM = args.class_id
+    CLASSNAME = args.name
+    CLASSTEACHER = args.teacher
+    CLASSNUM = args.classid
     
     autorepoter = Report()
     ret = autorepoter.link_generate()
