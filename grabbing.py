@@ -126,14 +126,14 @@ class Report(object):
             if(stdCount < limitCount):
                 if(MODE == 'grab'):
                     print("Class not full {}/{}, grabbing...".format(stdCount, limitCount))
-                    requests.get(qqmsg_send+"注意！！课程人数未满！现在为{}/{}人".format(stdCount, limitCount))
+                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
                     retry_count=5
                     retVal = False
                     while not retVal:
                         retVal = self.report(session, class_info, url_info)
                         if retVal:
                             print("Sucessfully grabbed!")
-                            requests.get(qqmsg_send + "抢课成功, 课程名:{}, 老师:{}, 上课时间:{}".format(class_name, class_teacher, class_time))
+                            requests.get(qqmsg_send + "抢课成功! 课程名:{}, 老师:{}, 上课时间:{}".format(class_name, class_teacher, class_time))
                             exit(0)
                         else:
                             print("Failed, retry...")
@@ -142,11 +142,11 @@ class Report(object):
                                 continue
                 else:
                     print("Class not full {}/{}, push QQmsg...".format(stdCount, limitCount))
-                    requests.get(qqmsg_send+"注意！！课程人数未满！现在为{}/{}人".format(stdCount, limitCount))
-                    requests.get(qqmsg_at+"\n{}课程人数未满！现在为{}/{}人".format(stdCount, limitCount))
+                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
+                    requests.get(qqmsg_at+"\n{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
             else:
                 print("Class is full.")
-                requests.get(qqmsg_send+"课程人数已满！现在为{}/{}人".format(stdCount, limitCount))
+                requests.get(qqmsg_send+"{}({}) 课程人数已满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
             time.sleep(60)
         return True
     def report(self, session, class_info, url_info):
