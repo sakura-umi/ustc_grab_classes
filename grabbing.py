@@ -315,13 +315,13 @@ if __name__ == "__main__":
 #   第四个参数为课程授课老师
 #   第五个参数为课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)
     parser = argparse.ArgumentParser(description='中国科学技术大学抢课脚本.')
-    parser.add_argument('mode', help='模式选择, grab为抢课模式, monitor为监控模式.', type=str)
+    parser.add_argument('-m', '--mode', help='模式选择, grab为抢课模式, monitor为监控模式, 默认为监控模式.', type=str, default='monitor')
     parser.add_argument('-t', '--time', help='两次查询间隔时间，单位为秒 (默认为60).', type=int, default=60)
     parser.add_argument('name', help='选中课程的中文名称', type=str)
     parser.add_argument('teacher', help='选中课程的授课老师', type=str)
     parser.add_argument('classid', help='课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)', type=str, default='', nargs='?')
     args = parser.parse_args()
-
+    
     MODE = args.mode
     TIME_INTERVAL = args.time
     CLASSNAME = args.class_name
