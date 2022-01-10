@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # encoding=utf8
 import requests
 import time
@@ -58,7 +59,17 @@ class Report(object):
         pos = url_stuid.rfind('/', 0, len(url_stuid))
         STDASSOC = url_stuid[pos+1:]
 
+        # 计算年份和学期
+        time_year = time.strftime('%y', time.localtime())
+        time_month = time.strftime('%m', time.localtime())
+        if int(time_month) > 6:
+            time_season = 1
+        else:
+            time_season = 0
+        YEAR_SEASON = 40*int(time_year) - 639 + int(time_season)*20
+        print(YEAR_SEASON)
         class_info={
+            'season' : str(YEAR_SEASON),
             'stdAssoc' : STDASSOC,
             'classNum': str(CLASSNUM),
             'className': urllib.parse.quote(CLASSNAME),
@@ -66,12 +77,18 @@ class Report(object):
         }
         print("searching target class...\n")
 
-        ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
+        ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/{season}/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
         
-
+        print(ALLCLASSINFO_URL)
         ret = session.get(ALLCLASSINFO_URL)
+        #print(ret.text)
         info = json.loads(ret.text)
-        lessonId = info['data'][0]['id']
+        try:
+            lessonId = info['data'][0]['id']
+        except Exception as e:
+            print(e)
+            print("没有找到该课程，退出")
+            exit()
         limitCount = info['data'][0]['limitCount']
         stdCount = info['data'][0]['stdCount']
         class_name = info['data'][0]['course']['nameZh']
@@ -82,7 +99,7 @@ class Report(object):
 
         print("find existing selected class...")
 
-        CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/221/search?bizTypeAssoc=2&studentAssoc={}&courseNameZhLike={}&courseTakeStatusSetVal=1".format(STDASSOC, urllib.parse.quote(class_name))
+        CLASSINFO_URL="https://jw.ustc.edu.cn/for-std/course-take-query/semester/{}/search?bizTypeAssoc=2&studentAssoc={}&courseNameZhLike={}&courseTakeStatusSetVal=1".format(int(class_info['season']), STDASSOC, urllib.parse.quote(class_name))
         ret = session.get(CLASSINFO_URL)
         if (len(json.loads(ret.text)['data']) == 0):
             GRAB_MODE = 0
@@ -91,18 +108,18 @@ class Report(object):
             GRAB_MODE = 1
             oldLessonCode = json.loads(ret.text)['data'][0]['lessonCode']
 
-            ret = session.get("https://jw.ustc.edu.cn/for-std/lesson-search/semester/221/search/{}?codeLike={}&courseNameZhLike=&teacherNameLike=".format(STDASSOC, oldLessonCode))
+            ret = session.get("https://jw.ustc.edu.cn/for-std/lesson-search/semester/{season}/search/{}?codeLike={}&courseNameZhLike=&teacherNameLike=".format(STDASSOC, oldLessonCode))
 
             oldLessonAssoc = json.loads(ret.text)['data'][0]['id']
 
         class_info['oldLessonAssoc'] = oldLessonAssoc
 
-        APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonId}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
+        APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={lessonId}&semesterAssoc={season}&bizTypeAssoc=2&studentAssoc={stdAssoc}".format(**class_info)
         PRECHECK_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
         GETRETAKE_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/getRetake?lessonIds={lessonId}&studentId={stdAssoc}&bizTypeId=2".format(**class_info)
         SAVE_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/save"
 
-        CHANGE_APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/change-class-apply/change-class?lessonAssoc={lessonId}&oldLessonId={oldLessonAssoc}&bizTypeAssoc=2&semesterAssoc=221&studentAssoc={stdAssoc}&applyTypeAssoc=5".format(**class_info)
+        CHANGE_APPLY_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/change-class-apply/change-class?lessonAssoc={lessonId}&oldLessonId={oldLessonAssoc}&bizTypeAssoc=2&semesterAssoc={season}&studentAssoc={stdAssoc}&applyTypeAssoc=5".format(**class_info)
         CHANGE_PRECHECK_URL = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/preCheck"
         ADD_DROP_REQUEST = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/add-drop-request"
         ADD_DROP_RESPOND = "https://jw.ustc.edu.cn/for-std/course-adjustment-apply/add-drop-response"
@@ -160,7 +177,7 @@ class Report(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept': '*/*',
             'Connection': 'keep-alive',
-            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={}&semesterAssoc=221&bizTypeAssoc=2&studentAssoc={}'.format(class_info['lessonId'], class_info['stdAssoc'])
+            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={}&semesterAssoc={season}&bizTypeAssoc=2&studentAssoc={}'.format(class_info['lessonId'], class_info['stdAssoc'])
         }
         #激活cookie用headers
         headers2 = {
@@ -186,14 +203,14 @@ class Report(object):
             'newLessonAssoc': int(class_info['lessonId']),
             'retake': False,
             'scheduleGroupAssoc': None,
-            'semesterAssoc': 221,
+            'semesterAssoc': int(class_info['season']),
             'studentAssoc': int(class_info['stdAssoc']),
         }
         #个性化申请表单-preCheck
         data2 = [{
             "newLessonAssoc": int(class_info['lessonId']),
             "studentAssoc": int(class_info['stdAssoc']),
-            "semesterAssoc": 221,
+            "semesterAssoc": int(class_info['season']),
             "bizTypeAssoc": 2,
             "applyTypeAssoc": 1,
             "applyReason": "申请",
@@ -204,7 +221,7 @@ class Report(object):
             "oldLessonAssoc": int(class_info['oldLessonAssoc']),
             "newLessonAssoc": int(class_info['lessonId']),
             "studentAssoc": int(class_info['stdAssoc']),
-            "semesterAssoc": 221,
+            "semesterAssoc": int(class_info['season']),
             "bizTypeAssoc": 2,
             "applyReason": "申请",
             "applyTypeAssoc": 5,
@@ -212,7 +229,7 @@ class Report(object):
         }]
         data4 = {
             "studentAssoc": int(class_info['stdAssoc']),
-            "semesterAssoc": 221,
+            "semesterAssoc": int(class_info['season']),
             "bizTypeAssoc": 2,
             "applyTypeAssoc": 5,
             "checkFalseInsertApply": True,
@@ -330,4 +347,3 @@ if __name__ == "__main__":
     
     autorepoter = Report()
     ret = autorepoter.link_generate()
-
