@@ -51,37 +51,60 @@ class Report(object):
         hl = hashlib.md5()
         STUID_MD5 = hl.update(STUID.encode(encoding='utf-8'))
         ret = session.get("https://jw.ustc.edu.cn/webroot/decision/login/cross/domain?fine_username={}&fine_password={}&validity=-1".format(STUID, hl.hexdigest()))
-        print("1 success!")
+        print("first get success!")
         ret = session.get("https://jw.ustc.edu.cn/")
-        print("2 success!")
+        print("second get success!")
         ret = session.get("https://jw.ustc.edu.cn/for-std/course-select")
+        
         url_stuid = ret.url
         pos = url_stuid.rfind('/', 0, len(url_stuid))
         STDASSOC = url_stuid[pos+1:]
 
-        # 计算年份和学期
-        time_year = time.strftime('%y', time.localtime())
-        time_month = time.strftime('%m', time.localtime())
-        if int(time_month) > 6:
-            time_season = 1
-        else:
-            time_season = 0
-        YEAR_SEASON = 40*int(time_year) - 639 + int(time_season)*20
-        print(YEAR_SEASON)
-        class_info={
-            'season' : str(YEAR_SEASON),
+        data_enterinto = {
+            "bizTypeId": 2,
+            "studentId": STDASSOC,
+        }
+
+        # 这部分是本学期新增的网页，将选课平台分流成专业课和英语/体育课两种，目前不清楚是否影响选课，先搁置。
+        # ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_enterinto)
+        # data = json.loads(ret.text)
+        # print(data)
+        # id_choice = list()
+        # for data_choice in data:
+        #     id_choice.append(int(data_choice['id']))
+        # print(id_choice)
+        # id_num = len(id_choice)
+        # for i in range(1, choice_num + 1):
+        #    print("{} ----- {}".format(i, id_choice[i - 1]))
+        # print('请从中选出你想要选择的课程所在的区域')      
+          
+        semester_choice = list()
+        semester_number = list()
+        ret = session.get("https://jw.ustc.edu.cn/for-std/lesson-search/index/{}".format(STDASSOC))
+        data = ret.text
+        soup = BeautifulSoup(data, 'html.parser')
+        for semester in soup.find("select", {"class": "semester"}):
+            if(semester.string != '\n'):
+                semester_choice.append(semester.string)
+                semester_number.append(semester['value'])
+        #choice_num = len(semester_choice)
+        print("[id]\t--\tdetails")
+        for i in range(0, 5):
+            print("[{}]\t--\t{}".format(semester_number[i], semester_choice[i]))
+        semester_user_choice = input("请选择你想抢课的课程所在的学期，输入最前面的序号：\n")
+        
+        class_info = {
+            'season' : str(semester_user_choice),
             'stdAssoc' : STDASSOC,
             'classNum': str(CLASSNUM),
             'className': urllib.parse.quote(CLASSNAME),
             'classTeacher': urllib.parse.quote(CLASSTEACHER)
         }
-        print("searching target class...\n")
+        print("searching target class...")
 
         ALLCLASSINFO_URL="https://jw.ustc.edu.cn/for-std/lesson-search/semester/{season}/search/{stdAssoc}?codeLike={classNum}&courseNameZhLike={className}&teacherNameLike={classTeacher}".format(**class_info)
-        
-        print(ALLCLASSINFO_URL)
+
         ret = session.get(ALLCLASSINFO_URL)
-        #print(ret.text)
         info = json.loads(ret.text)
         try:
             lessonId = info['data'][0]['id']
@@ -90,12 +113,14 @@ class Report(object):
             print("没有找到该课程，退出")
             exit()
         limitCount = info['data'][0]['limitCount']
+        gxhlimitCount = info['data'][0]['courseApplyLimit']
         stdCount = info['data'][0]['stdCount']
         class_name = info['data'][0]['course']['nameZh']
         class_teacher = info['data'][0]['teacherAssignmentList'][0]['person']['nameZh']
         class_time = info['data'][0]['scheduleText']['dateTimePlacePersonText']['text']
         class_info['lessonId'] = lessonId
-        print("target class: " + class_name + "\nlesson id: " + str(lessonId) + "\ncurrent selected/limited count: " + str(stdCount) + '/' + str(limitCount) + '\n')
+        
+        print("--------------------------\ntarget class: " + class_name + "\nlesson id: " + str(lessonId) + "\ncurrent selected/limited count: " + str(stdCount) + '/' + str(limitCount) + '\n--------------------------')
 
         print("find existing selected class...")
 
@@ -108,7 +133,7 @@ class Report(object):
             GRAB_MODE = 1
             oldLessonCode = json.loads(ret.text)['data'][0]['lessonCode']
 
-            ret = session.get("https://jw.ustc.edu.cn/for-std/lesson-search/semester/{season}/search/{}?codeLike={}&courseNameZhLike=&teacherNameLike=".format(STDASSOC, oldLessonCode))
+            ret = session.get("https://jw.ustc.edu.cn/for-std/lesson-search/semester/{}/search/{}?codeLike={}&courseNameZhLike=&teacherNameLike=".format(int(class_info['season']), STDASSOC, oldLessonCode))
 
             oldLessonAssoc = json.loads(ret.text)['data'][0]['id']
 
@@ -135,22 +160,28 @@ class Report(object):
             'drop_request': ADD_DROP_REQUEST,
             'drop_respond': ADD_DROP_RESPOND
         }
+        counting = 0
         while True:
             ret = session.get(ALLCLASSINFO_URL)
             info = json.loads(ret.text)
             limitCount = info['data'][0]['limitCount']
             stdCount = info['data'][0]['stdCount']
-            if(stdCount < limitCount):
+            classtype_bool = stdCount >= limitCount and stdCount < gxhlimitCount
+            if (CLASSTYPE == 'public'):
+                classtype_bool = False
+            if(stdCount < limitCount or classtype_bool):
                 if(MODE == 'grab'):
-                    print("Class not full {}/{}, grabbing...".format(stdCount, limitCount))
-                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
+                    print("Class not full {}/{}/{}, grabbing...".format(stdCount, limitCount, gxhlimitCount))
+                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
                     retry_count=5
                     retVal = False
                     while not retVal:
                         retVal = self.report(session, class_info, url_info)
                         if retVal:
+                            requests.get(qqmsg_send+"抢课成功! 课程名:{}, 老师:{}".format(class_name, class_teacher))
+                            print(qqmsg_send+"抢课成功! 课程名:{}, 老师:{}".format(class_name, class_teacher))
                             print("Sucessfully grabbed!")
-                            requests.get(qqmsg_send + "抢课成功! 课程名:{}, 老师:{}, 上课时间:{}".format(class_name, class_teacher, class_time))
+                            time.sleep(2)
                             exit(0)
                         else:
                             print("Failed, retry...")
@@ -158,14 +189,22 @@ class Report(object):
                             if(retry_count == 0):
                                 continue
                 else:
-                    print("Class not full {}/{}, push QQmsg...".format(stdCount, limitCount))
-                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
-                    requests.get(qqmsg_at+"\n{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
+                    print("Class not full {}/{}/{}, push QQmsg...".format(stdCount, limitCount, gxhlimitCount))
+                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+                    #requests.get(qqmsg_at+"\n{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
             else:
                 print("Class is full.")
-                requests.get(qqmsg_send+"{}({}) 课程人数已满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
-            time.sleep(60)
-        return True
+                counting = counting + 1
+                if(counting == 60):
+                    counting = 1
+                    requests.get(qqmsg_send+"{}({}) 课程人数已满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+            try:
+                time.sleep(TIME_INTERVAL)
+            except Exception as e:
+                print(e)
+                time.sleep(60)
+            
+        return True        
     def report(self, session, class_info, url_info):
         loginsuccess = False
         retrycount = 5
@@ -177,7 +216,7 @@ class Report(object):
             'Accept-Encoding': 'gzip, deflate',
             'Accept': '*/*',
             'Connection': 'keep-alive',
-            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={}&semesterAssoc={season}&bizTypeAssoc=2&studentAssoc={}'.format(class_info['lessonId'], class_info['stdAssoc'])
+            'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={}&semesterAssoc={}&bizTypeAssoc=2&studentAssoc={}'.format(class_info['lessonId'],class_info['season'], class_info['stdAssoc'])
         }
         #激活cookie用headers
         headers2 = {
@@ -247,7 +286,7 @@ class Report(object):
         
         ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
 
-        ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/{}/turn/461/select".format(class_info['stdAssoc']), cookies=session.cookies)
+        ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/{}/turn/541/select".format(class_info['stdAssoc']), cookies=session.cookies)
         
         if(url_info['mode'] == 0):
             ret = session.get(url_info['apply'])
@@ -333,9 +372,11 @@ if __name__ == "__main__":
 #   第五个参数为课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)
     parser = argparse.ArgumentParser(description='中国科学技术大学抢课脚本.')
     parser.add_argument('-m', '--mode', help='模式选择, grab为抢课模式, monitor为监控模式, 默认为监控模式.', type=str, default='monitor')
+    parser.add_argument('-c', '--classtype', help='课程类别选择, public为公选课, major为专业课, 默认为公选课模式. 区别为专业课可以个性化申请，公选课不允许个性化申请. 如果想即选即中请选择public.', type=str, default='public')
     parser.add_argument('-t', '--time', help='两次查询间隔时间，单位为秒 (默认为60).', type=int, default=60)
     parser.add_argument('name', help='选中课程的中文名称', type=str)
     parser.add_argument('teacher', help='选中课程的授课老师', type=str)
+    parser.add_argument('qqnum', help='你要私聊提醒的qq号', type=str)
     parser.add_argument('classid', help='课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)', type=str, default='', nargs='?')
     args = parser.parse_args()
     
@@ -344,6 +385,9 @@ if __name__ == "__main__":
     CLASSNAME = args.name
     CLASSTEACHER = args.teacher
     CLASSNUM = args.classid
+    QQ = args.qqnum
+    CLASSTYPE = args.classtype    
     
     autorepoter = Report()
     ret = autorepoter.link_generate()
+
