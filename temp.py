@@ -1,13 +1,12 @@
 #!/usr/bin/python3
 # encoding=utf8
 import requests
-import time
 import datetime
-import pytz
-import re
-import sys
+import time
 import argparse
 import json
+import re
+import pytz
 import io
 import os
 from bs4 import BeautifulSoup
@@ -18,21 +17,16 @@ import hashlib
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-STUID='XXXXXX'#学号
-STUKEY='XXXXXX'#统一认证登录密码
-TurnAssoc=781 #学期编号，进入选课页面后看url，末尾的数字，如781
-MODE='monitor'#模式,分为两种 "grab"和"monitor". monitor只监控, grab监控到又空余位置时进行抢课.
-#下面是qqbot推送参数
-QQ='XXXXXX'
-GROUP='XXXXXX'
-QQAPIURL='http://XXX.XXX:XXX'
+STUID='PB20051107'#学号
+STUKEY=''#统一认证登录密码
+MODE='grab'#模式,分为两种 "grab"和"monitor". monitor只监控, grab监控到又空余位置时进行抢课.
+
+
+sckey = 'SCT218403TWUT6Xc89EE91yYPlGWyLsWO2'
 
 LOGIN_URL="https://passport.ustc.edu.cn/login?service=https%3A%2F%2Fjw.ustc.edu.cn%2Fucas-sso%2Flogin"
 RETURN_URL="https://jw.ustc.edu.cn/ucas-sso/login"
 
-qqmsg_send='{}/send_private_msg?user_id={}&message='.format(QQAPIURL, QQ)
-qqmsg_chuo='{}/send_private_msg?user_id={}&message=[CQ:poke,qq={}]'.format(QQAPIURL, QQ, QQ)
-qqmsg_at='{}/send_group_msg?group_id={}&message=[CQ:at,qq={}]'.format(QQAPIURL, GROUP, QQ)
 
 
 class Report(object):
@@ -66,18 +60,6 @@ class Report(object):
             "studentId": STDASSOC,
         }
 
-        # 这部分是本学期新增的网页，将选课平台分流成专业课和英语/体育课两种，目前不清楚是否影响选课，先搁置。
-        # ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_enterinto)
-        # data = json.loads(ret.text)
-        # print(data)
-        # id_choice = list()
-        # for data_choice in data:
-        #     id_choice.append(int(data_choice['id']))
-        # print(id_choice)
-        # id_num = len(id_choice)
-        # for i in range(1, choice_num + 1):
-        #    print("{} ----- {}".format(i, id_choice[i - 1]))
-        # print('请从中选出你想要选择的课程所在的区域')      
           
         semester_choice = list()
         semester_number = list()
@@ -92,7 +74,7 @@ class Report(object):
         print("[id]\t--\tdetails")
         for i in range(0, 5):
             print("[{}]\t--\t{}".format(semester_number[i], semester_choice[i]))
-        semester_user_choice = input("请选择你想抢课的课程所在的学期，输入最前面的序号：\n")
+        semester_user_choice = '322'#input("请选择你想抢课的课程所在的学期，输入最前面的序号：\n")
         
         class_info = {
             'season' : str(semester_user_choice),
@@ -179,153 +161,49 @@ class Report(object):
             if(stdCount < limitCount or classtype_bool):
                 if(MODE == 'grab'):
                     print("Class not full {}/{}/{}, grabbing...".format(stdCount, limitCount, gxhlimitCount))
-                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+                    #requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+                    url = f'https://sc.ftqq.com/{sckey}.send?text=课程人数未满&desp=课程人数未满'
+                    requests.get(url)
                     retry_count=5
                     retVal = False
                     while not retVal:
                         retVal = self.report(session, class_info, url_info)
                         if retVal:
-                            requests.get(qqmsg_send+"抢课成功! 课程名:{}, 老师:{}".format(class_name, class_teacher))
-                            print(qqmsg_send+"抢课成功! 课程名:{}, 老师:{}".format(class_name, class_teacher))
+                            #requests.get(qqmsg_send+"抢课成功! 课程名:{}, 老师:{}".format(class_name, class_teacher))
+                            url = f'https://sc.ftqq.com/{sckey}.send?text=抢课成功&desp=抢课成功'
+                            requests.get(url)
+                            #print(qqmsg_send+"抢课成功! 课程名:{}, 老师:{}".format(class_name, class_teacher))
                             print("Sucessfully grabbed!")
                             time.sleep(2)
                             exit(0)
                         else:
                             print("Failed, retry...")
+                            url = f'https://sc.ftqq.com/{sckey}.send?text=抢课失败&desp=抢课失败'
+                            requests.get(url)
                             retry_count = retry_count - 1
                             if(retry_count == 0):
                                 continue
                 else:
                     print("Class not full {}/{}/{}, push QQmsg...".format(stdCount, limitCount, gxhlimitCount))
-                    requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+                    url = f'https://sc.ftqq.com/{sckey}.send?text=课程人数未满&desp=课程人数未满'
+                    requests.get(url)
+                    #requests.get(qqmsg_send+"注意！！{}({}) 课程人数未满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
                     #requests.get(qqmsg_at+"\n{}({}) 课程人数未满！现在为{}/{}人".format(class_name, class_teacher, stdCount, limitCount))
             else:
                 print("Class is full.")
                 counting = counting + 1
                 if(counting == 60):
                     counting = 1
-                    requests.get(qqmsg_send+"{}({}) 课程人数已满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+                    print("{}({}) 课程人数已满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
+                    # url = f'https://sc.ftqq.com/{sckey}.send?text=课程人数已满&desp=课程人数已满'
+                    # requests.get(url)
+                    #requests.get(qqmsg_send+"{}({}) 课程人数已满！现在为{}/{}/{}人".format(class_name, class_teacher, stdCount, limitCount, gxhlimitCount))
             try:
                 time.sleep(TIME_INTERVAL)
             except Exception as e:
                 print(e)
                 time.sleep(60)
-            
-        return True        
-    # def report(self, session, class_info, url_info):
-    #     loginsuccess = False
-    #     retrycount = 5
-    #     cookies = session.cookies
-    #     #选课post数据的headers
-    #     headers = {
-    #         'Content-Type':'application/json;charset=UTF-8',
-    #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
-    #         'Accept-Encoding': 'gzip, deflate',
-    #         'Accept': '*/*',
-    #         'Connection': 'keep-alive',
-    #         'Referer': 'https://jw.ustc.edu.cn/for-std/course-adjustment-apply/selection-apply/apply?lessonAssoc={}&semesterAssoc={}&bizTypeAssoc=2&studentAssoc={}'.format(class_info['lessonId'],class_info['season'], class_info['stdAssoc'])
-    #     }
-    #     #激活cookie用headers
-    #     headers2 = {
-    #         'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',
-    #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
-    #         'Accept-Encoding': 'gzip, deflate',
-    #         'Accept': '*/*',
-    #         'Connection': 'keep-alive',
-    #         'Referer': 'https://jw.ustc.edu.cn/for-std/course-select/turns/{}'.format(class_info['stdAssoc'])
-    #     }
-    #     headers3 = {
-    #         'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8',
-    #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
-    #         'Accept-Encoding': 'gzip, deflate',
-    #         'Accept': '*/*',
-    #         'Connection': 'keep-alive'
-    #     }
-    #     #个性化申请表单-save
-    #     data = {
-    #         'applyReason': '申请',
-    #         'applyTypeAssoc': 1,
-    #         'bizTypeAssoc': 2,
-    #         'newLessonAssoc': int(class_info['lessonId']),
-    #         'retake': False,
-    #         'scheduleGroupAssoc': None,
-    #         'semesterAssoc': int(class_info['season']),
-    #         'studentAssoc': int(class_info['stdAssoc']),
-    #     }
-    #     #个性化申请表单-preCheck
-    #     data2 = [{
-    #         "newLessonAssoc": int(class_info['lessonId']),
-    #         "studentAssoc": int(class_info['stdAssoc']),
-    #         "semesterAssoc": int(class_info['season']),
-    #         "bizTypeAssoc": 2,
-    #         "applyTypeAssoc": 1,
-    #         "applyReason": "申请",
-    #         "retake": False,
-    #         "scheduleGroupAssoc": None
-    #     }]
-    #     data3 = [{
-    #         "oldLessonAssoc": int(class_info['oldLessonAssoc']),
-    #         "newLessonAssoc": int(class_info['lessonId']),
-    #         "studentAssoc": int(class_info['stdAssoc']),
-    #         "semesterAssoc": int(class_info['season']),
-    #         "bizTypeAssoc": 2,
-    #         "applyReason": "申请",
-    #         "applyTypeAssoc": 5,
-    #         "scheduleGroupAssoc": None
-    #     }]
-    #     data4 = {
-    #         "studentAssoc": int(class_info['stdAssoc']),
-    #         "semesterAssoc": int(class_info['season']),
-    #         "bizTypeAssoc": 2,
-    #         "applyTypeAssoc": 5,
-    #         "checkFalseInsertApply": True,
-    #         "lessonAndScheduleGroups":[{
-    #             "lessonAssoc": int(class_info['lessonId']),
-    #             "dropLessonAssoc": int(class_info['oldLessonAssoc']),
-    #             "scheduleGroupAssoc": None
-    #         }]
-    #     }
-    #     data_activate = {
-    #         "bizTypeId": 2,
-    #         "studentId": int(class_info['stdAssoc'])
-    #     }
-    #     ret = session.get("https://jw.ustc.edu.cn/static/courseselect/template/open-turns.html", cookies=session.cookies)
-        
-    #     ret = session.post("https://jw.ustc.edu.cn/ws/for-std/course-select/open-turns", data=data_activate, headers=headers2)
 
-    #     ret = session.get("https://jw.ustc.edu.cn/for-std/course-select/{}/turn/541/select".format(class_info['stdAssoc']), cookies=session.cookies)
-        
-    #     if(url_info['mode'] == 0):
-    #         ret = session.get(url_info['apply'])
-
-    #         ret = session.post(url_info['change_precheck'], data=json.dumps(data2), headers=headers)
-
-    #         ret = session.get(url_info['getretake'])
-
-    #         ret = session.post(url_info['save'], data=json.dumps(data), headers=headers)
-
-    #         if(ret.text == 'null'):
-    #             return True
-    #         else:
-    #             return False
-    #     else:
-    #         ret = session.get(url_info['change_apply'])
-
-    #         ret = session.post(url_info['precheck'], data=json.dumps(data3), headers=headers)
-
-    #         ret = session.post(url_info['drop_request'], data=json.dumps(data4), headers=headers)
-
-    #         print(ret)
-
-    #         requestId = ret.text
-
-    #         data_respond = {
-    #             'studentId': class_info['stdAssoc'],
-    #             'requestId': requestId
-    #         }
-    #         ret = session.post(url_info['drop_respond'], data=json.dumps(data_respond), headers=headers3)
-
-    #         return True
     def report(self, session, class_info, url_info):
         loginsuccess = False
         retrycount = 5
@@ -342,7 +220,7 @@ class Report(object):
             "Content-Length": "98",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Origin": "https://jw.ustc.edu.cn",
-            "Referer": f'https://jw.ustc.edu.cn/for-std/course-select/{stdAssoc_}/turns/{TurnAssoc}/select',
+            "Referer": f'https://jw.ustc.edu.cn/for-std/course-select/{stdAssoc_}/turns/781/select',
             "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
             "X-Requested-With": "XMLHttpRequest"
         }
@@ -358,7 +236,7 @@ class Report(object):
             "Content-Length": "98",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Origin": "https://jw.ustc.edu.cn",
-            "Referer": f'https://jw.ustc.edu.cn/for-std/course-select/{stdAssoc_}turns/{TurnAssoc}/select',
+            "Referer": f'https://jw.ustc.edu.cn/for-std/course-select/{stdAssoc_}turns/781/select',
             "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
             "X-Requested-With": "XMLHttpRequest"
         }
@@ -373,19 +251,19 @@ class Report(object):
             "Content-Length": "98",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
             "Origin": "https://jw.ustc.edu.cn",
-            "Referer": f'https://jw.ustc.edu.cn/for-std/course-select/{stdAssoc_}turns/{TurnAssoc}/select',
+            "Referer": f'https://jw.ustc.edu.cn/for-std/course-select/{stdAssoc_}turns/781/select',
             "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36 Edg/92.0.902.67',
             "X-Requested-With": "XMLHttpRequest"
         }
         data0 = {
             'studentId': stdAssoc_,
-            'turnId': TurnAssoc
+            'turnId': 781
         }
         
         data1 = {
             "studentAssoc": int(class_info['stdAssoc']),
             "lessonAssoc": int(class_info['lessonId']),
-            "courseSelectTurnAssoc":TurnAssoc,
+            "courseSelectTurnAssoc":781,
             "scheduleGroupAssoc": None,
             "virtualCost": 0
         }
@@ -404,6 +282,7 @@ class Report(object):
             print(ret.text)
             return False
 
+
     def login(self):
         retries = Retry(total=5,
                         backoff_factor=0.5,
@@ -416,6 +295,7 @@ class Report(object):
         # x = re.search(r"""<input.*?name="CAS_LT".*?>""", r.text).group(0)
         # cas_lt = re.search(r'value="(LT-\w*)"', x).group(1)
         cas_lt = re.search(r'(LT-\w*)', r.text).group()
+        print(cas_lt)
         CAS_CAPTCHA_URL = "https://passport.ustc.edu.cn/validatecode.jsp?type=login"        
         r = s.get(CAS_CAPTCHA_URL)
         img = PIL.Image.open(io.BytesIO(r.content))
@@ -439,6 +319,7 @@ class Report(object):
             'CAS_LT': cas_lt,
             'LT': lt_code
         }
+        print(data)
         ret = s.post(LOGIN_URL, data=data)
         print("login...")
         #print(ret.cookies.get_dict)
@@ -447,31 +328,13 @@ class Report(object):
 
 
 if __name__ == "__main__":
-
-#参数说明:
-#   第一个参数为模式选择, grab为抢课模式, monitor为监控模式
-#   第二个参数为两次查询间隔时间，单位为秒（默认为60）
-#   第三个参数为课程中文名称
-#   第四个参数为课程授课老师
-#   第五个参数为课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)
-    parser = argparse.ArgumentParser(description='中国科学技术大学抢课脚本.')
-    parser.add_argument('-m', '--mode', help='模式选择, grab为抢课模式, monitor为监控模式, 默认为监控模式.', type=str, default='monitor')
-    parser.add_argument('-c', '--classtype', help='课程类别选择, public为公选课, major为专业课, 默认为公选课模式. 区别为专业课可以个性化申请，公选课不允许个性化申请. 如果想即选即中请选择public.', type=str, default='public')
-    parser.add_argument('-t', '--time', help='两次查询间隔时间，单位为秒 (默认为60).', type=int, default=60)
-    parser.add_argument('name', help='选中课程的中文名称', type=str)
-    parser.add_argument('teacher', help='选中课程的授课老师', type=str)
-    parser.add_argument('qqnum', help='你要私聊提醒的qq号', type=str)
-    parser.add_argument('classid', help='课程号, 若前两项已经可以唯一确定则可以为空(如果不唯一的话, 不要为空!)', type=str, default='', nargs='?')
-    args = parser.parse_args()
     
-    MODE = args.mode
-    TIME_INTERVAL = args.time
-    CLASSNAME = args.name
-    CLASSTEACHER = args.teacher
-    CLASSNUM = args.classid
-    QQ = args.qqnum
-    CLASSTYPE = args.classtype    
+    MODE = 'grab'#args.mode
+    TIME_INTERVAL = 3#args.time
+    CLASSNAME = '网络算法学'#args.name
+    CLASSTEACHER = '华蓓'#args.teacher
+    CLASSNUM = '011185.01'#args.classid
+    CLASSTYPE = 'public'#args.classtype    
     
     autorepoter = Report()
     ret = autorepoter.link_generate()
-
